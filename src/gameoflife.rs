@@ -1,6 +1,6 @@
 use std::fmt;
 
-use ndarray::{s,Array,Array2};
+use ndarray::{s,azip,Array,Array2};
 use rand::distributions::{Distribution,Bernoulli};
 
 pub struct GameOfLife {
@@ -37,26 +37,27 @@ impl GameOfLife {
         }
     }
 
+    // get the value of a cell
+    // true = live, false = dead
+    pub fn get_cell(&self, x:usize, y:usize) -> Option<&bool> {
+        self.grid.get((x,y))
+    }
+
     ///////////
     // Privates
     ///////////
-    pub fn num_neighbors(&self, x:usize, y:usize) -> u32 {
+    fn num_neighbors(&self, x:usize, y:usize) -> u32 {
         let (gridh, gridw) = self.grid.dim();
         // let slice = s![x-1..x+3, y-1..y+3];
         let xmin = (x).max(1) - 1;
         let ymin = (y).max(1) - 1;
         let xmax = (x+2).min(gridh);
         let ymax = (y+2).min(gridw);
-        let cell_val = *self.get_cell(x, y) as u32;
+        let cell_val = *self.get_cell(x, y).unwrap() as u32;
         let neighbors = self.grid.slice(s![xmin..xmax, ymin..ymax]); // including cell (x,y)
         // dbg!(s![xmin..xmax, ymin..ymax]);
         // dbg!(&neighbors);
         neighbors.map(|&x| x as u32).sum() - cell_val
-    }
-
-    // TODO: return Option<&bool> instead of panicking
-    pub fn get_cell(&self, x:usize, y:usize) -> &bool {
-        self.grid.get((x,y)).expect("indices are out-of-bounds")
     }
 
     fn set_cell(&mut self, x:usize, y:usize, b:bool) {
@@ -72,16 +73,46 @@ impl GameOfLife {
             n_neighbors == 3
         }
     }
+    
+    // (EXPERIMENTAL) vectorized num. neighbors
+    fn num_neighbors_grid(&self) -> Array2<u32> {
+        // grid has size (M,N)
+        // create copy of grid (as u32) with 1 layer of zero-padding
+        let (gridh, gridw) = self.grid.dim(); // (M, N)
+        let mut grid_pad: Array2<u32> = Array2::zeros((gridh+2, gridw+2)); // size (M+2, N+2)
+        self.grid.mapv(|x| x as u32)
+            .assign_to(grid_pad.slice_mut(s![1..-1, 1..-1]));
+
+        // final array
+        let mut nn: Array2<u32> = Array2::zeros(self.grid.raw_dim());
+
+        // add up/down/left/right neighbors
+        azip!((
+            x in &mut nn,
+            &d  in &grid_pad.slice(s![2..  , 1..-1]), // lower neighbors
+            &u  in &grid_pad.slice(s![ ..-2, 1..-1]), // upper neighbors
+            &r  in &grid_pad.slice(s![1..-1, 2..  ]), // right neighbors
+            &l  in &grid_pad.slice(s![1..-1,  ..-2]), // left neighbors
+        ) *x = d + u + l + r);
+
+        // add diagonal neighbors
+        azip!((
+            x in &mut nn,
+            &dr in &grid_pad.slice(s![2..  , 2..  ]), // lower-right neighbors
+            &ur in &grid_pad.slice(s![ ..-2, 2..  ]), // upper-right neighbors
+            &dl in &grid_pad.slice(s![2..  ,  ..-2]), // lower-left neighbors
+            &ul in &grid_pad.slice(s![ ..-2,  ..-2])  // upper-left neighbors
+        ) *x = *x + dr + dl + ur + ul);
+
+        nn
+    }
 
     //////////
     // Publics
     //////////
     pub fn tick(&mut self) {
         // build array where (x,y) -> # of live neighbors
-        let neighbors_iter = self.grid.indexed_iter()
-            .map(|((x,y), _)| self.num_neighbors(x, y));
-        let neighbors_grid = Array::from_iter(neighbors_iter)
-            .into_shape(self.grid.raw_dim()).unwrap();
+        let neighbors_grid = self.num_neighbors_grid();
 
         // update each cell
         for ((x,y), c) in self.grid.indexed_iter_mut() {
