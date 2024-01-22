@@ -1,41 +1,76 @@
-use std::io;
+mod mines;
 
-mod gameoflife;
+use std::{io, num::ParseIntError};
+use std::io::Write;
 
-use crate::gameoflife::GameOfLife;
+use mines::{MineField,MoveResult,Point};
+
 
 fn main() {
     // println!("Hello, world!");
-    let mut game = GameOfLife::random(40, 30, 0.3);
-    for _ in 0..8 {
+    let mut game = MineField::with_n_mines(8, 9, 30);
+    game_loop(&mut game);
+}
+
+fn game_loop(game: &mut MineField) {
+    let mut input_str = String::new();
+    let mut input_pt: Point;
+    loop {
         print!("{}", game);
 
-        // Get input "x y"
-        // parse input
-        // print value and NN of cell (x,y)
-        println!("> ");
-        let mut input_str = String::new();
+        // Get input "x y" and parse it into a Point
         loop {
+            print!("> ");
+            io::stdout().flush().expect("couldn't flush output");
             input_str.clear();
             io::stdin()
-            .read_line(&mut input_str)
-            .expect("failed to read line");
-        if input_str == "\n" {
+                .read_line(&mut input_str)
+                .expect("failed to read line");
+
+            // parse input
+            let input_res_vec: Vec<Result<usize, ParseIntError>> = input_str.trim()
+                .split(' ')
+                .map(|x| x.parse::<usize>())
+                .collect();
+            if input_res_vec.iter().any(|x| x.is_err()) 
+            || input_res_vec.len() != 2 {
+                println!("input format must be 'x y'");
+                continue
+            }
+            let input_vec: Vec<usize> = input_res_vec.into_iter().map(|x| x.unwrap()).collect();
+            if input_vec.len() != 2 {
+                println!("input format must be 'x y'");
+                continue
+            }
+            let input_x = *input_vec.get(0).expect("input format must be 'x y'");
+            let input_y = *input_vec.get(1).expect("input format must be 'x y'");
+            let input_pt_opt = game.get(input_x, input_y);
+            match input_pt_opt {
+                None => {
+                    println!("input ({},{}) is OOB", input_x, input_y);
+                    continue
+                },
+                Some(pt) => input_pt = pt
+            }
             break
         }
-        let input_vec: Vec<usize> = input_str.trim()
-        .split(' ')
-                .map(|x| x.parse::<usize>().expect("input format must be 'x y'") )
-                .collect();
-            let &input_x = input_vec.get(0).expect("input format must be 'x y'");
-            let &input_y = input_vec.get(1).expect("input format must be 'x y'");
-            let cell = match game.get_cell(input_x, input_y) {
-                Some(false) => "⬛️",
-                Some(true) => "⬜️",
-                None => ""
-            };
-            println!("cell ({},{}): {}", input_x, input_y, cell);
+
+        // reveal the square
+        let reveal_res = game.reveal(&input_pt);
+        match reveal_res {
+            MoveResult::LOSE => {
+                print!("{}", game);
+                println!("You lose!");
+                break
+            },
+            MoveResult::WIN => {
+                print!("{}", game);
+                println!("You win!");
+                break
+            },
+            MoveResult::ERR(ref msg) => println!("bad input: {}", &msg),
+            MoveResult::OK => ()
         }
-        game.tick();
+        dbg!(&reveal_res);
     }
 }
