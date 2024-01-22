@@ -3,6 +3,13 @@ use std::fmt;
 use ndarray::{s,azip,Array,Array2};
 use rand::distributions::{Distribution,Bernoulli};
 
+use std::io::{self, Write};
+
+use crossterm::{
+    ExecutableCommand, execute,
+    cursor::{DisableBlinking, EnableBlinking, MoveTo, RestorePosition, SavePosition}
+};
+
 pub struct GameOfLife {
     grid: Array2<bool>,
     nstep: u32
@@ -12,6 +19,7 @@ impl GameOfLife {
     ///////////////
     // Constructors
     ///////////////
+    #[allow(dead_code)]
     pub fn new(height: usize, width: usize) -> Self {
         Self {
             grid: Array2::default([height, width]),
@@ -55,8 +63,6 @@ impl GameOfLife {
         let ymax = (y+2).min(gridw);
         let cell_val = *self.get_cell(x, y).unwrap() as u32;
         let neighbors = self.grid.slice(s![xmin..xmax, ymin..ymax]); // including cell (x,y)
-        // dbg!(s![xmin..xmax, ymin..ymax]);
-        // dbg!(&neighbors);
         neighbors.map(|&x| x as u32).sum() - cell_val
     }
 
@@ -74,7 +80,7 @@ impl GameOfLife {
         }
     }
     
-    // (EXPERIMENTAL) vectorized num. neighbors
+    // vectorized num. neighbors
     fn num_neighbors_grid(&self) -> Array2<u32> {
         // grid has size (M,N)
         // create copy of grid (as u32) with 1 layer of zero-padding
