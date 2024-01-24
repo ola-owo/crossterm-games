@@ -2,6 +2,7 @@ use std::fmt;
 
 use ndarray::{s,azip,Array,Array2,Zip};
 use rand::{distributions::{Distribution,Bernoulli}, seq::SliceRandom};
+use crossterm::style::Stylize;
 
 // values to show on revealed non-mine squares
 // const DIGIT_STRS: [&str; 9] = ["⬜️", "1", "2", "3", "4", "5", "6", "7", "8"];
@@ -11,7 +12,7 @@ const MINE_STR: &str = "X";
 
 #[derive(Debug)]
 
-// move result from reveal()
+// move result returned from reveal()
 pub enum MoveResult {
     LOSE,
     WIN,
@@ -29,6 +30,7 @@ impl Point {
         (self.i, self.j)
     }
 
+    #[allow(dead_code)]
     pub fn arr(&self) -> [usize; 2] {
         [self.i, self.j]
     }
@@ -153,21 +155,6 @@ impl MineField {
     // Privates
     ///////////
 
-    // count how many mines are around square
-    // fn num_neighbors(&self, i:usize, j:usize) -> u32 {
-    //     let (gridh, gridw) = self.mines.dim();
-    //     // let slice = s![x-1..x+3, y-1..y+3];
-    //     let xmin = i.max(1) - 1;
-    //     let ymin = j.max(1) - 1;
-    //     let xmax = (i+2).min(gridh);
-    //     let ymax = (j+2).min(gridw);
-    //     let cell_val = *self.peek_mine(i, j).unwrap() as u32;
-    //     let neighbors_slice = self.neighbors.slice(s![xmin..xmax, ymin..ymax]); // including cell (x,y)
-    //     // dbg!(s![xmin..xmax, ymin..ymax]);
-    //     // dbg!(&neighbors);
-    //     neighbors_slice.map(|&x| x as u32).sum() - cell_val
-    // }
-
     // check whether square has mine,
     // without fully revealing it
     fn peek_mine(&self, p: &Point) -> Option<&bool> {
@@ -181,28 +168,6 @@ impl MineField {
             None => None
         }
     }
-
-    // iterate over neighbors
-    // returns a 2-D Iter, or Err if (i,j) is out of bounds
-    // fn iter_neighbors(&self, i: usize, j: usize) -> 
-    // Result<Vec<(usize,usize)>, String> {
-    //     let (gridh, gridw) = self.mines.dim();
-    //     // check input coords
-    //     if i >= gridh {
-    //         return Err(format!("index i={i} is OOB"));
-    //     } else if j >= gridw {
-    //         return Err(format!("index j={j} is OOB"));
-    //     }
-    //     // get min/max i and j
-    //     let imin = i.max(1) - 1;
-    //     let jmin = j.max(1) - 1;
-    //     let imax = (i+1).min(gridh-1);
-    //     let jmax = (j+1).min(gridw-1);
-
-    //     let iter = iter::zip(imin..=imax, jmin..=jmax)
-    //         .filter(|&(a,b)| !(a==i && b==j));
-    //     Ok(Vec::from_iter(iter))
-    // }
 
     fn get_neighbors_iter(&self, p: &Point) -> impl Iterator<Item=Point> {
         let (gridh, gridw) = self.mines.dim();
@@ -287,16 +252,19 @@ impl MineField {
     // (and all neighbors if square has no neighboring mines
     // Result indicates whether square is a mine
     //
-    /*
-    possible outcomes:
-        1- mine
-            - show "you lose!" message
-            - end game
-        2- neighboring mines
-            - reveal # of neighbors
-        3- no neighboring minees
-            - reveal all neighbors
-    */
+    // possible outcomes:
+    // 1 - hit a mine
+    //   - show "you lose!" message
+    //   - end game
+    // 2 - non-mine; no non-mines left
+    //   - show "you win!" message
+    //   - end game
+    // 3 - non-mine; nearby mines exist
+    //   - reveal # of neighbors
+    // 4 - non-mine; no nearby minees
+    //   - reveal all neighbors recursively
+    // 5 - OOB or already-revealed square
+    //   - return ERR without updating board
     pub fn reveal(&mut self, p: &Point) -> MoveResult {
         match self.revealed.get_mut(p.tuple()) {
             None => return MoveResult::ERR(String::from("index OOB")),
@@ -351,17 +319,37 @@ impl fmt::Display for MineField {
         // print grid lines
         let print_lines = mrn_zip.map_collect(|&m, &r, &n| {
             match (m,r,n) {
-                (_, false, _) => HIDDEN_STR,   // hidden square (⬛️)
-                (true, true, _) => MINE_STR,      // revealed mine
-                (false, true, n) => DIGIT_STRS[n as usize]
+                (_, false, _) => HIDDEN_STR.blue(),                // hidden square (⬛️)
+                (true, true, _) => MINE_STR.red(),                 // revealed mine
+                (false, true, 0) => DIGIT_STRS[0].dark_grey(),     // empty space
+                (false, true, n) => DIGIT_STRS[n as usize].white() // space w/ nearby mines
             }
         });
-        let print_lines_joined = print_lines.outer_iter().map(|line| {
-            String::from_iter(line.iter().map(|&x| x))
-        })
-            .collect::<Vec<String>>()
-            .join("\n");
 
-        writeln!(f, "{}", print_lines_joined)
+        // write each (styled) character separately
+        let ax_labeller = |i: usize| if i.rem_euclid(3)==0 {i.to_string()} else {"".to_string()};
+        let mut write_res: fmt::Result = Ok(());
+        for (i, row) in print_lines.outer_iter().enumerate() {
+            // print vertical axis labels
+            let v_ax_lbl = ax_labeller(i);
+            write_res = write_res.and(write!(f, "{:2}", v_ax_lbl));
+
+            // print board squares (double spaced)
+            for chr in row.iter() {
+                write_res = write_res.and(write!(f, "{} ", chr));
+            }
+
+            // double spacing between rows
+            write_res = write_res.and(write!(f, "\n\n"));
+        }
+
+        // print horiz axis labels
+        write_res = write_res.and(write!(f, "{:2}", ""));
+        for h_ax_lbl in (0..self.mines.ncols()).map(ax_labeller) {
+            write_res = write_res.and(write!(f, "{:2}", h_ax_lbl));
+        }
+        write_res = write_res.and(write!(f, "\n"));
+
+        write_res
     }
 }
