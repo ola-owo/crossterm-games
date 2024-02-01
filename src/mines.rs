@@ -1,14 +1,24 @@
-use std::fmt;
+use std::{fmt, io};
 
+use itertools::izip;
 use ndarray::{s,azip,Array,Array2,Zip};
 use rand::{distributions::{Distribution,Bernoulli}, seq::SliceRandom};
-use crossterm::style::Stylize;
+
+use crate::Point;
 
 // values to show on revealed non-mine squares
 // const DIGIT_STRS: [&str; 9] = ["⬜️", "1", "2", "3", "4", "5", "6", "7", "8"];
 const DIGIT_STRS: [&str; 9] = ["_", "1", "2", "3", "4", "5", "6", "7", "8"];
 const HIDDEN_STR: &str = "#";
 const MINE_STR: &str = "X";
+const FLAG_STR: &str = "@";
+
+pub enum SquareView {
+    HIDDEN,
+    FLAG,
+    REVEALED(u32),
+    MINE
+}
 
 #[derive(Debug)]
 
@@ -20,33 +30,15 @@ pub enum MoveResult {
     ERR(String)
 }
 
-pub struct Point {
-    i: usize,
-    j: usize
-}
 
-impl Point {
-    pub fn tuple(&self) -> (usize, usize) {
-        (self.i, self.j)
-    }
-
-    #[allow(dead_code)]
-    pub fn arr(&self) -> [usize; 2] {
-        [self.i, self.j]
-    }
-}
-
-impl fmt::Display for Point {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "({}, {})", self.i, self.j)
-    }
-}
 
 pub struct MineField {
     mines: Array2<bool>, // mines[i,j] == true if mine is at (i,j)
     neighbors: Array2<u32>, // neighbors[i,j] == # of neighboring mines
     revealed: Array2<bool>, // revealed[i,j] == true if (i,j) has been revealed
-    n_revealed: u32
+    flagged: Array2<bool>,  // flagged[i,j] == true if flag has been placed at (i,j)
+    n_revealed: u32,
+    dim: (usize, usize),
 }
 
 impl MineField {
@@ -113,12 +105,16 @@ impl MineField {
         // build other struct fields
         let revealed = Array2::default(mines.raw_dim());
         let neighbors = Self::n_neighbors_grid(&mines);
+        let flagged = Array2::default(mines.raw_dim());
+        let dim = mines.dim();
 
         Self {
             mines: mines,
             neighbors: neighbors,
             revealed: revealed,
-            n_revealed: 0
+            flagged: flagged,
+            n_revealed: 0,
+            dim: dim
         }
     }
 
@@ -141,12 +137,16 @@ impl MineField {
         // build other struct fields
         let revealed = Array2::default(mines.raw_dim());
         let neighbors = Self::n_neighbors_grid(&mines);
+        let flagged = Array2::default(mines.raw_dim());
+        let dim = mines.dim();
 
         Self {
             mines: mines,
             neighbors: neighbors,
             revealed: revealed,
-            n_revealed: 0
+            flagged: flagged,
+            n_revealed: 0,
+            dim: dim
         }
     }
 
@@ -170,7 +170,7 @@ impl MineField {
     }
 
     fn get_neighbors_iter(&self, p: &Point) -> impl Iterator<Item=Point> {
-        let (gridh, gridw) = self.mines.dim();
+        let (gridh, gridw) = self.dim;
         let i0 = p.i;
         let j0 = p.j;
         let imin = i0.max(1) - 1;
@@ -240,12 +240,60 @@ impl MineField {
     // get a point (i,j)
     // this fxn mainly exists to make sure (i,j) is in-bounds
     pub fn get(&self, i: usize, j: usize) -> Option<Point> {
-        let (gridh, gridw) = self.mines.dim();
+        let (gridh, gridw) = self.dim;
         if i >= gridh || j >= gridw {
             None
         } else {
             Some(Point {i, j})
         }
+    }
+
+    pub fn flag(&mut self, p: &Point) -> MoveResult {
+        match self.flagged.get_mut(p.tuple()) {
+            None => MoveResult::ERR(String::from("index OOB")),
+            Some(true) => MoveResult::ERR(String::from("already flagged")),
+            Some(f) => {
+                *f = true;
+                MoveResult::OK
+            }
+        }
+    }
+
+    pub fn is_flag(&self, p: &Point) -> Option<&bool> {
+        self.flagged.get(p.tuple())
+    }
+
+    pub fn view_sq(&self, p: Point) -> SquareView {
+        let revealed = self.is_revealed(&p).unwrap();
+        let ismine = self.peek_mine(&p).unwrap();
+        let isflag = self.is_flag(&p).unwrap();
+
+        match (revealed, ismine, isflag) {
+            (false, _, false) => SquareView::HIDDEN,
+            (false, _, true)  => SquareView::FLAG,
+            (true, false, _)  => SquareView::REVEALED(*self.neighbors.get(p.tuple()).unwrap()),
+            (true, true, _)   => SquareView::MINE
+        }
+    }
+
+    // '_ is the anonymous lifetime of the ndarray iterators
+    // + '_ indicates that iterator lifetime is bound by underlying ndarrays (I think)
+    pub fn get_view_iter(&self) -> impl Iterator<Item=SquareView> + '_ {
+        let sqdata_zip = izip!(
+            self.revealed.iter(),
+            self.mines.iter(),
+            self.flagged.iter(),
+            self.neighbors.iter()
+        );
+
+        sqdata_zip.map(|(&rev, &mine, &flag, &nn)| {
+            match (rev, mine, flag, nn) {
+                (false, _, false, _) => SquareView::HIDDEN,
+                (false, _, true, _)  => SquareView::FLAG,
+                (true, false, _, nn) => SquareView::REVEALED(nn),
+                (true, true, _, _)   => SquareView::MINE
+            }
+        })
     }
 
     // reveal square (i,j)
@@ -313,16 +361,18 @@ impl MineField {
 impl fmt::Display for MineField {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // zip iterator of mines(bool), revealed(bool), and neighbors(u32)
-        let mrn_zip = Zip::from(&self.mines)
+        let sqdata_zip = Zip::from(&self.mines)
             .and(&self.revealed)
-            .and(&self.neighbors);
+            .and(&self.neighbors)
+            .and(&self.flagged);
         // print grid lines
-        let print_lines = mrn_zip.map_collect(|&m, &r, &n| {
-            match (m,r,n) {
-                (_, false, _) => HIDDEN_STR.blue(),                // hidden square (⬛️)
-                (true, true, _) => MINE_STR.red(),                 // revealed mine
-                (false, true, 0) => DIGIT_STRS[0].dark_grey(),     // empty space
-                (false, true, n) => DIGIT_STRS[n as usize].white() // space w/ nearby mines
+        let print_lines = sqdata_zip.map_collect(|&mine, &rev, &nn, &flag| {
+            match (mine, rev, nn, flag) {
+                (_, false, _, false) => HIDDEN_STR,                // hidden square (⬛️)
+                (_, false, _, true) => FLAG_STR, // space w/ nearby mines
+                (true, true, _, _) => MINE_STR,                 // revealed mine
+                (false, true, 0, _) => DIGIT_STRS[0],     // empty space
+                (false, true, n, _) => DIGIT_STRS[n as usize], // space w/ nearby mines
             }
         });
 
