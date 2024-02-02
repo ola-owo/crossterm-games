@@ -77,6 +77,19 @@ impl MineSweeper {
         }
     }
 
+    // Default beginner / intermediate / expert boards
+    pub fn new_beginner() -> Self {
+        Self::with_n_mines(8, 8, 10)
+    }
+
+    pub fn new_intermediate() -> Self {
+        Self::with_n_mines(16, 16, 40)
+    }
+
+    pub fn new_expert() -> Self {
+        Self::with_n_mines(16, 30, 99)
+    }
+
     pub fn game_loop(&mut self) {
         let mut user_action: MineUIAction;
         loop {
@@ -197,7 +210,7 @@ impl fmt::Display for MineSweeper {
 
 fn main() {
     // println!("Hello, world!");
-    let mut game = MineSweeper::with_n_mines(7, 8, 8);
+    let mut game = MineSweeper::new_beginner();
     execute!(stdout(), EnterAlternateScreen).expect("failed to enter alt screen");
     enable_raw_mode().unwrap();
     game.game_loop();
