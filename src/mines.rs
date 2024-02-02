@@ -20,7 +20,7 @@ pub enum SquareView {
     Mine
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 
 // move result returned from reveal()
 pub enum MoveResult {
@@ -227,11 +227,24 @@ impl MineField {
         Ok(())
     }
 
+    fn reveal_neighbors(&mut self, p: &Point) -> MoveResult {
+        let mut res = MoveResult::Ok;
+        for neighbor_pt in self.get_neighbors_iter(p) {
+            if !self.is_revealed(&neighbor_pt).unwrap() {
+                res = self.reveal(&neighbor_pt);
+                if res != MoveResult::Ok {
+                    break
+                }
+            }
+        }
+        res
+    }
+
     // reveal all mines after game is over
     fn reveal_all_mines(&mut self) {
-        azip!((r in &mut self.revealed, &m in &self.mines) {
+        azip!((r in &mut self.revealed, &m in &self.mines)
             if m { *r = true }
-        });
+        );
     }
 
 
@@ -250,32 +263,36 @@ impl MineField {
         }
     }
 
-    pub fn flag(&mut self, p: &Point) -> MoveResult {
-        match self.flagged.get_mut(p.tuple()) {
-            None => MoveResult::Err(String::from("index OOB")),
-            Some(true) => MoveResult::Ok,
-            Some(f) => {
-                *f = true;
-                MoveResult::Ok
-            }
+    pub fn toggle_flag(&mut self, p: &Point) -> MoveResult {
+        // if already revealed, do nothing
+        if let Some(true) = self.is_revealed(p) {
+            return MoveResult::Ok
+        }
+
+        // flip flagged state
+        if let Some(flagged) = self.flagged.get_mut(p.tuple()) {
+            *flagged = ! *flagged;
+            MoveResult::Ok
+        } else {
+            MoveResult::Err(String::from("index OOB"))
         }
     }
 
-    pub fn is_flag(&self, p: &Point) -> Option<&bool> {
-        self.flagged.get(p.tuple())
+    pub fn is_flag(&self, p: &Point) -> Option<bool> {
+        self.flagged.get(p.tuple()).copied()
     }
 
-    pub fn view_sq(&self, p: Point) -> SquareView {
-        let revealed = self.is_revealed(&p).unwrap();
-        let ismine = self.peek_mine(&p).unwrap();
-        let isflag = self.is_flag(&p).unwrap();
+    pub fn view_sq(&self, p: &Point) -> Option<SquareView> {
+        let revealed = self.is_revealed(&p)?;
+        let ismine = self.peek_mine(&p)?;
+        let isflag = self.is_flag(&p)?;
 
-        match (revealed, ismine, isflag) {
+        Some(match (revealed, ismine, isflag) {
             (false, _, false) => SquareView::Hidden,
             (false, _, true)  => SquareView::Flag,
             (true, false, _)  => SquareView::Revealed(*self.neighbors.get(p.tuple()).unwrap()),
             (true, true, _)   => SquareView::Mine
-        }
+        })
     }
 
     // '_ is the anonymous lifetime of the ndarray iterators
@@ -316,14 +333,25 @@ impl MineField {
     // 5 - OOB or already-revealed square
     //   - return Err without updating board
     pub fn reveal(&mut self, p: &Point) -> MoveResult {
-        match self.revealed.get_mut(p.tuple()) {
+        match self.view_sq(p) {
             None => return MoveResult::Err(String::from("index OOB")),
-            Some(true) => return MoveResult::Err(String::from("already revealed")),
-            Some(r) => {
-                *r = true;
+            Some(SquareView::Flag) => return MoveResult::Ok,
+            Some(SquareView::Revealed(_)) => return MoveResult::Ok, // TODO: chord
+            Some(SquareView::Hidden) => {
+                let rev = self.revealed.get_mut(p.tuple()).unwrap();
+                *rev = true;
                 self.n_revealed += 1;
-            }
+            },
+            _ => ()
         }
+        // match self.revealed.get_mut(p.tuple()) {
+        //     None => return MoveResult::Err(String::from("index OOB")),
+        //     Some(true) => return MoveResult::Ok, // TODO: chord
+        //     Some(r) => {
+        //         *r = true;
+        //         self.n_revealed += 1;
+        //     }
+        // }
 
         // if a mine is hit, end game
         // (unless it's the 1st move)
@@ -340,12 +368,7 @@ impl MineField {
         // if 0 neighbors, reveal all neighbors (recursively?)
         let nn = *self.neighbors.get(p.tuple()).unwrap();
         if nn == 0 {
-            // for (ii, jj) in self.iter_neighbors(i, j).unwrap() {
-            for neighbor_pt in self.get_neighbors_iter(p) {
-                if !self.is_revealed(&neighbor_pt).unwrap() {
-                    self.reveal(&neighbor_pt);
-                }
-            }
+            self.reveal_neighbors(p);
         }
 
         // check if game is won

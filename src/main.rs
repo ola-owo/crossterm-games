@@ -1,11 +1,12 @@
 mod mines;
 mod mineui;
 
-use std::{io, num::ParseIntError};
-use std::io::Write;
+use std::io::stdout;
 use std::fmt;
 
 use crossterm::style::{ContentStyle, StyledContent, Stylize};
+use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
 use crossterm::terminal::{Clear,ClearType};
 use crossterm::cursor::MoveTo;
 use crossterm::execute;
@@ -98,7 +99,7 @@ impl MineSweeper {
                     let p = self.ui.get_cursor();
                     let move_res = match self.ui.mode {
                         UIMode::Reveal => self.field.reveal(&p),
-                        UIMode::Flag => self.field.flag(&p)
+                        UIMode::Flag => self.field.toggle_flag(&p)
                     };
                     if !self.handle_res(&move_res) {
                         println!("{}", self);
@@ -121,7 +122,7 @@ impl MineSweeper {
                 false
             },
             MoveResult::Err(ref msg) => {
-                self.message = self.fmt_err_msg(format!("bad input: {}", &msg).to_string());
+                self.message = self.fmt_err_msg(msg.to_string());
                 true
             }
             MoveResult::Ok => {
@@ -144,7 +145,7 @@ impl fmt::Display for MineSweeper {
         let ax_labeller = |i: usize| if i.rem_euclid(3)==0 {i.to_string()} else {"".to_string()};
 
         // reset terminal cursor
-        execute!(io::stdout(), MoveTo(0,0), Clear(ClearType::All)).unwrap();
+        execute!(stdout(), MoveTo(0,0), Clear(ClearType::All)).unwrap();
 
         let (cursor_i, cursor_j) = self.ui.get_cursor().tuple();
         let board_iter = self.field.get_view_iter();
@@ -198,42 +199,11 @@ impl fmt::Display for MineSweeper {
 
 fn main() {
     // println!("Hello, world!");
-    let mut game = MineSweeper::with_n_mines(8, 9, 10);
+    let mut game = MineSweeper::with_n_mines(7, 8, 8);
+    execute!(stdout(), EnterAlternateScreen).expect("failed to enter alt screen");
+    enable_raw_mode().unwrap();
     game.game_loop();
-}
-
-fn get_input(game: &MineField) -> Point {
-    let mut input_str = String::new();
-    loop {
-        print!("\n> ");
-        io::stdout().flush().expect("couldn't flush output");
-        input_str.clear();
-        io::stdin()
-            .read_line(&mut input_str)
-            .expect("failed to read line");
-
-        // parse input
-        let input_res_vec: Vec<Result<usize, ParseIntError>> = input_str.trim()
-            .split(' ')
-            .map(|x| x.parse::<usize>())
-            .collect();
-        if input_res_vec.iter().any(|x| x.is_err()) || input_res_vec.len() != 2 {
-            println!("input format must be 'x y'");
-            continue
-        }
-        let input_vec: Vec<usize> = input_res_vec.into_iter().map(|x| x.unwrap()).collect();
-        if input_vec.len() != 2 {
-            println!("input format must be 'x y'");
-            continue
-        }
-        let input_x = *input_vec.get(0).expect("input format must be 'x y'");
-        let input_y = *input_vec.get(1).expect("input format must be 'x y'");
-        let input_pt_opt = game.get(input_x, input_y);
-        if let Some(input_pt) = input_pt_opt {
-            return input_pt
-        } else {
-            println!("input ({},{}) is OOB", input_x, input_y);
-            continue
-        }
-    }
+    game.ui.wait_for_action_block().ok();
+    disable_raw_mode().unwrap();
+    execute!(stdout(), LeaveAlternateScreen).expect("failed to exit alt screen");
 }

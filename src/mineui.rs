@@ -1,7 +1,6 @@
 use std::{io, time::Duration};
 
 use crossterm::event::{poll, read, Event::Key, KeyCode, KeyEvent};
-use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
 
 use crate::Point;
 
@@ -129,12 +128,9 @@ impl MineUI {
 
     // block until event happens
     pub fn wait_for_action_block(&self) -> io::Result<MineUIAction> {
-        // enable_raw_mode();
         let action: MineUIAction;
         loop {
-            enable_raw_mode()?;
             let read_res = read();
-            disable_raw_mode()?;
             if let Key(key_event) = read_res? {
                 action = Self::match_key_to_action(key_event);
                 break
@@ -147,9 +143,7 @@ impl MineUI {
     // poll with a timeout
     pub fn wait_for_action_poll(&self, timeout: u64) -> io::Result<MineUIAction> {
         let action: MineUIAction;
-        enable_raw_mode()?;
         let read_res = read();
-        disable_raw_mode()?;
         if poll(Duration::from_secs(timeout))? {
             // event happened
             if let Key(key_event) = read_res? {
