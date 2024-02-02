@@ -86,19 +86,19 @@ impl MineSweeper {
             dbg!(&user_action);
 
             match user_action {
-                MineUIAction::QUIT => break,
-                MineUIAction::WAIT => {},
-                MineUIAction::MODE(newmode) => self.ui.mode = newmode,
-                MineUIAction::MOVE(movedir) => {
+                MineUIAction::Quit => break,
+                MineUIAction::Wait => {},
+                MineUIAction::Mode(newmode) => self.ui.mode = newmode,
+                MineUIAction::ToggleMode => self.ui.toggle_mode(),
+                MineUIAction::Move(movedir) => {
                     self.message = "".to_string().reset();
-                    self.ui.move_cursor(movedir)
-                        .unwrap_or_else(|e| self.message = self.fmt_err_msg(e));
+                    self.ui.move_cursor(movedir).ok();
                 },
-                MineUIAction::SELECT => {
+                MineUIAction::Select => {
                     let p = self.ui.get_cursor();
                     let move_res = match self.ui.mode {
-                        UIMode::REVEAL => self.field.reveal(&p),
-                        UIMode::FLAG => self.field.flag(&p)
+                        UIMode::Reveal => self.field.reveal(&p),
+                        UIMode::Flag => self.field.flag(&p)
                     };
                     if !self.handle_res(&move_res) {
                         println!("{}", self);
@@ -112,19 +112,19 @@ impl MineSweeper {
     // output indicates whether to keep looping
     fn handle_res(&mut self, res: &MoveResult) -> bool {
         match res {
-            MoveResult::LOSE => {
+            MoveResult::Lose => {
                 self.message = "You lose!".to_string().bold().white().on_dark_red();
                 false
             },
-            MoveResult::WIN => {
+            MoveResult::Win => {
                 self.message = "You win!".to_string().bold().white().on_magenta();
                 false
             },
-            MoveResult::ERR(ref msg) => {
+            MoveResult::Err(ref msg) => {
                 self.message = self.fmt_err_msg(format!("bad input: {}", &msg).to_string());
                 true
             }
-            MoveResult::OK => {
+            MoveResult::Ok => {
                 self.message = "".to_string().reset();
                 true
             }
@@ -151,11 +151,11 @@ impl fmt::Display for MineSweeper {
         for (sq_ix, sq) in board_iter.enumerate() {
             // assign (styled) string for this square
             let mut sq_str = match sq {
-                SquareView::HIDDEN => HIDDEN_STR.blue(),
-                SquareView::FLAG => FLAG_STR.dark_yellow(),
-                SquareView::MINE => MINE_STR.red(),
-                SquareView::REVEALED(0) => DIGIT_STRS[0].dark_grey(),
-                SquareView::REVEALED(nn) => DIGIT_STRS[nn as usize].white()
+                SquareView::Hidden => HIDDEN_STR.blue(),
+                SquareView::Flag => FLAG_STR.dark_yellow(),
+                SquareView::Mine => MINE_STR.red(),
+                SquareView::Revealed(0) => DIGIT_STRS[0].dark_grey(),
+                SquareView::Revealed(nn) => DIGIT_STRS[nn as usize].white()
             };
 
             // get coordinates of this square
@@ -165,8 +165,8 @@ impl fmt::Display for MineSweeper {
             // replace sq_str with cursor
             if sqi == cursor_i && sqj == cursor_j {
                 sq_str = match self.ui.mode {
-                    mineui::UIMode::REVEAL => sq_str.bold().cyan(),
-                    mineui::UIMode::FLAG => sq_str.bold().yellow()
+                    mineui::UIMode::Reveal => sq_str.bold().cyan(),
+                    mineui::UIMode::Flag => sq_str.bold().yellow()
                 }
             }
 

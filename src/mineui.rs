@@ -7,25 +7,26 @@ use crate::Point;
 
 #[derive(Debug)]
 pub enum MineUIAction {
-    WAIT,
-    MOVE(MoveDirection),
-    MODE(UIMode),
-    SELECT,
-    QUIT
+    Wait,
+    Move(MoveDirection),
+    Mode(UIMode),
+    ToggleMode,
+    Select,
+    Quit
 }
 
 #[derive(Debug)]
 pub enum MoveDirection {
-    UP,
-    DOWN,
-    LEFT,
-    RIGHT
+    Up,
+    Down,
+    Left,
+    Right
 }
 
 #[derive(Debug)]
 pub enum UIMode {
-    FLAG,
-    REVEAL
+    Flag,
+    Reveal
 }
 
 pub struct MineUI {
@@ -42,15 +43,16 @@ impl MineUI {
 
     fn match_key_to_action(key_event: KeyEvent) -> MineUIAction {
         match key_event.code {
-            KeyCode::Up => MineUIAction::MOVE(MoveDirection::UP),
-            KeyCode::Down => MineUIAction::MOVE(MoveDirection::DOWN),
-            KeyCode::Left => MineUIAction::MOVE(MoveDirection::LEFT),
-            KeyCode::Right => MineUIAction::MOVE(MoveDirection::RIGHT),
-            KeyCode::Enter => MineUIAction::SELECT,
-            KeyCode::Char('f') => MineUIAction::MODE(UIMode::FLAG),
-            KeyCode::Char('r') => MineUIAction::MODE(UIMode::REVEAL),
-            KeyCode::Char('q') => MineUIAction::QUIT,
-            _ => MineUIAction::WAIT
+            KeyCode::Up => MineUIAction::Move(MoveDirection::Up),
+            KeyCode::Down => MineUIAction::Move(MoveDirection::Down),
+            KeyCode::Left => MineUIAction::Move(MoveDirection::Left),
+            KeyCode::Right => MineUIAction::Move(MoveDirection::Right),
+            KeyCode::Enter => MineUIAction::Select,
+            KeyCode::Char('f') => MineUIAction::Mode(UIMode::Flag),
+            KeyCode::Char('r') => MineUIAction::Mode(UIMode::Reveal),
+            KeyCode::Char(' ') => MineUIAction::ToggleMode,
+            KeyCode::Char('q') => MineUIAction::Quit,
+            _ => MineUIAction::Wait
         }
     }
 
@@ -63,7 +65,7 @@ impl MineUI {
             gridh: height,
             gridw: width,
             cursor: Point::origin(),
-            mode: UIMode::REVEAL
+            mode: UIMode::Reveal
         }
     }
 
@@ -77,10 +79,10 @@ impl MineUI {
 
         
         let delta: (i32, i32) = match dir {
-            MoveDirection::UP => (-1, 0),
-            MoveDirection::DOWN => (1, 0),
-            MoveDirection::LEFT => (0, -1),
-            MoveDirection::RIGHT => (0, 1)
+            MoveDirection::Up => (-1, 0),
+            MoveDirection::Down => (1, 0),
+            MoveDirection::Left => (0, -1),
+            MoveDirection::Right => (0, 1)
         };
         
         // check upper and left boundaries
@@ -117,6 +119,14 @@ impl MineUI {
         self.cursor
     }
 
+    pub fn toggle_mode(&mut self) {
+        let newmode = match self.mode {
+            UIMode::Reveal => UIMode::Flag,
+            UIMode::Flag => UIMode::Reveal
+        };
+        self.mode = newmode;
+    }
+
     // block until event happens
     pub fn wait_for_action_block(&self) -> io::Result<MineUIAction> {
         // enable_raw_mode();
@@ -147,11 +157,11 @@ impl MineUI {
                 action = Self::match_key_to_action(key_event);
             } else {
                 // non-keystroke event
-                action = MineUIAction::WAIT;
+                action = MineUIAction::Wait;
             }
         } else {
             // no event happened
-            action = MineUIAction::WAIT;
+            action = MineUIAction::Wait;
         }
 
         Ok(action)

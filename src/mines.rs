@@ -1,4 +1,4 @@
-use std::{fmt, io};
+use std::fmt;
 
 use itertools::izip;
 use ndarray::{s,azip,Array,Array2,Zip};
@@ -14,23 +14,21 @@ const MINE_STR: &str = "X";
 const FLAG_STR: &str = "@";
 
 pub enum SquareView {
-    HIDDEN,
-    FLAG,
-    REVEALED(u32),
-    MINE
+    Hidden,
+    Flag,
+    Revealed(u32),
+    Mine
 }
 
 #[derive(Debug)]
 
 // move result returned from reveal()
 pub enum MoveResult {
-    LOSE,
-    WIN,
-    OK,
-    ERR(String)
+    Lose,
+    Win,
+    Ok,
+    Err(String)
 }
-
-
 
 pub struct MineField {
     mines: Array2<bool>, // mines[i,j] == true if mine is at (i,j)
@@ -191,7 +189,11 @@ impl MineField {
         //     .all(|(&revealed, &mine)| {revealed || mine})
         let n_mines: u32 = self.mines.iter().map(|&x| x as u32).sum();
         let n_squares = self.mines.len() as u32;
+        
         self.n_revealed == n_squares - n_mines
+
+        // let all_mines_flagged = Zip::from(&self.mines).and(&self.flagged)
+        //     .all(|&m, &f| m == f);
     }
 
     fn move_mine(&mut self, mine: &Point) -> Result<(), String> {
@@ -250,11 +252,11 @@ impl MineField {
 
     pub fn flag(&mut self, p: &Point) -> MoveResult {
         match self.flagged.get_mut(p.tuple()) {
-            None => MoveResult::ERR(String::from("index OOB")),
-            Some(true) => MoveResult::ERR(String::from("already flagged")),
+            None => MoveResult::Err(String::from("index OOB")),
+            Some(true) => MoveResult::Ok,
             Some(f) => {
                 *f = true;
-                MoveResult::OK
+                MoveResult::Ok
             }
         }
     }
@@ -269,10 +271,10 @@ impl MineField {
         let isflag = self.is_flag(&p).unwrap();
 
         match (revealed, ismine, isflag) {
-            (false, _, false) => SquareView::HIDDEN,
-            (false, _, true)  => SquareView::FLAG,
-            (true, false, _)  => SquareView::REVEALED(*self.neighbors.get(p.tuple()).unwrap()),
-            (true, true, _)   => SquareView::MINE
+            (false, _, false) => SquareView::Hidden,
+            (false, _, true)  => SquareView::Flag,
+            (true, false, _)  => SquareView::Revealed(*self.neighbors.get(p.tuple()).unwrap()),
+            (true, true, _)   => SquareView::Mine
         }
     }
 
@@ -288,10 +290,10 @@ impl MineField {
 
         sqdata_zip.map(|(&rev, &mine, &flag, &nn)| {
             match (rev, mine, flag, nn) {
-                (false, _, false, _) => SquareView::HIDDEN,
-                (false, _, true, _)  => SquareView::FLAG,
-                (true, false, _, nn) => SquareView::REVEALED(nn),
-                (true, true, _, _)   => SquareView::MINE
+                (false, _, false, _) => SquareView::Hidden,
+                (false, _, true, _)  => SquareView::Flag,
+                (true, false, _, nn) => SquareView::Revealed(nn),
+                (true, true, _, _)   => SquareView::Mine
             }
         })
     }
@@ -312,11 +314,11 @@ impl MineField {
     // 4 - non-mine; no nearby minees
     //   - reveal all neighbors recursively
     // 5 - OOB or already-revealed square
-    //   - return ERR without updating board
+    //   - return Err without updating board
     pub fn reveal(&mut self, p: &Point) -> MoveResult {
         match self.revealed.get_mut(p.tuple()) {
-            None => return MoveResult::ERR(String::from("index OOB")),
-            Some(true) => return MoveResult::ERR(String::from("already revealed")),
+            None => return MoveResult::Err(String::from("index OOB")),
+            Some(true) => return MoveResult::Err(String::from("already revealed")),
             Some(r) => {
                 *r = true;
                 self.n_revealed += 1;
@@ -331,7 +333,7 @@ impl MineField {
                 self.move_mine(p).unwrap();
             } else {
                 self.reveal_all_mines();
-                return MoveResult::LOSE
+                return MoveResult::Lose
             }
         }
 
@@ -349,9 +351,9 @@ impl MineField {
         // check if game is won
         if self.game_won() {
             self.reveal_all_mines();
-            MoveResult::WIN
+            MoveResult::Win
         } else {
-            MoveResult::OK
+            MoveResult::Ok
         }
     }
     
