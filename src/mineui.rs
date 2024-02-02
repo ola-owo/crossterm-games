@@ -46,10 +46,10 @@ impl MineUI {
             KeyCode::Down => MineUIAction::Move(MoveDirection::Down),
             KeyCode::Left => MineUIAction::Move(MoveDirection::Left),
             KeyCode::Right => MineUIAction::Move(MoveDirection::Right),
-            KeyCode::Enter => MineUIAction::Select,
+            KeyCode::Char(' ') => MineUIAction::Select,
             KeyCode::Char('f') => MineUIAction::Mode(UIMode::Flag),
             KeyCode::Char('r') => MineUIAction::Mode(UIMode::Reveal),
-            KeyCode::Char(' ') => MineUIAction::ToggleMode,
+            KeyCode::Tab => MineUIAction::ToggleMode,
             KeyCode::Char('q') => MineUIAction::Quit,
             _ => MineUIAction::Wait
         }
@@ -147,7 +147,7 @@ impl MineUI {
         if poll(Duration::from_secs(timeout))? {
             // event happened
             if let Key(key_event) = read_res? {
-                // event was a keystroke
+                // keystroke event
                 action = Self::match_key_to_action(key_event);
             } else {
                 // non-keystroke event

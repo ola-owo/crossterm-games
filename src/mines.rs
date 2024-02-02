@@ -167,7 +167,7 @@ impl MineField {
         }
     }
 
-    fn get_neighbors_iter(&self, p: &Point) -> impl Iterator<Item=Point> {
+    fn neighbors_iter(&self, p: &Point) -> impl Iterator<Item=Point> {
         let (gridh, gridw) = self.dim;
         let i0 = p.i;
         let j0 = p.j;
@@ -229,7 +229,7 @@ impl MineField {
 
     fn reveal_neighbors(&mut self, p: &Point) -> MoveResult {
         let mut res = MoveResult::Ok;
-        for neighbor_pt in self.get_neighbors_iter(p) {
+        for neighbor_pt in self.neighbors_iter(p) {
             if !self.is_revealed(&neighbor_pt).unwrap() {
                 res = self.reveal(&neighbor_pt);
                 if res != MoveResult::Ok {
@@ -238,6 +238,20 @@ impl MineField {
             }
         }
         res
+    }
+
+    fn chord(&mut self, p: &Point) -> MoveResult {
+        let nn_mines: u32 = *self.neighbors.get(p.tuple()).unwrap();
+        let nn_flags = self.neighbors_iter(p)
+            .map(|p| self.is_flag(&p).unwrap() as u32)
+            .sum();
+
+        // only chord if # of neighboring flags == # of neighboring mines
+        if nn_mines == nn_flags {
+            self.reveal_neighbors(p)
+        } else {
+            MoveResult::Ok
+        }
     }
 
     // reveal all mines after game is over
@@ -251,17 +265,6 @@ impl MineField {
     //////////
     // Publics
     //////////
-
-    // get a point (i,j)
-    // this fxn mainly exists to make sure (i,j) is in-bounds
-    pub fn get(&self, i: usize, j: usize) -> Option<Point> {
-        let (gridh, gridw) = self.dim;
-        if i >= gridh || j >= gridw {
-            None
-        } else {
-            Some(Point {i, j})
-        }
-    }
 
     pub fn toggle_flag(&mut self, p: &Point) -> MoveResult {
         // if already revealed, do nothing
@@ -335,23 +338,15 @@ impl MineField {
     pub fn reveal(&mut self, p: &Point) -> MoveResult {
         match self.view_sq(p) {
             None => return MoveResult::Err(String::from("index OOB")),
-            Some(SquareView::Flag) => return MoveResult::Ok,
-            Some(SquareView::Revealed(_)) => return MoveResult::Ok, // TODO: chord
-            Some(SquareView::Hidden) => {
+            Some(SquareView::Flag) => return MoveResult::Ok, // do nothing if flag
+            Some(SquareView::Revealed(_)) => return self.chord(p),
+            Some(SquareView::Hidden) => { // if hidden, mark square as revealed
                 let rev = self.revealed.get_mut(p.tuple()).unwrap();
                 *rev = true;
                 self.n_revealed += 1;
             },
             _ => ()
         }
-        // match self.revealed.get_mut(p.tuple()) {
-        //     None => return MoveResult::Err(String::from("index OOB")),
-        //     Some(true) => return MoveResult::Ok, // TODO: chord
-        //     Some(r) => {
-        //         *r = true;
-        //         self.n_revealed += 1;
-        //     }
-        // }
 
         // if a mine is hit, end game
         // (unless it's the 1st move)

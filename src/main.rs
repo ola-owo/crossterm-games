@@ -1,7 +1,7 @@
 mod mines;
 mod mineui;
 
-use std::io::stdout;
+use std::io::{stdout, Write};
 use std::fmt;
 
 use crossterm::style::{ContentStyle, StyledContent, Stylize};
@@ -77,15 +77,15 @@ impl MineSweeper {
         }
     }
 
-    fn game_loop(&mut self) {
+    pub fn game_loop(&mut self) {
         let mut user_action: MineUIAction;
         loop {
             println!("{}", self);
-
+            
             // wait for input
             user_action = self.ui.wait_for_action_block().expect("failed to read input");
             dbg!(&user_action);
-
+            
             match user_action {
                 MineUIAction::Quit => break,
                 MineUIAction::Wait => {},
@@ -109,7 +109,7 @@ impl MineSweeper {
             }
         }
     }
-
+    
     // output indicates whether to keep looping
     fn handle_res(&mut self, res: &MoveResult) -> bool {
         match res {
@@ -134,6 +134,12 @@ impl MineSweeper {
 
     fn fmt_err_msg<D: fmt::Display + Stylize<Styled = StyledContent<D>>>(&mut self, msg: D) -> StyledContent<D> {
         msg.red()
+    }
+
+    // get a point (i,j)
+    // this fxn mainly exists to make sure (i,j) is in-bounds
+    fn get_pt(&self, i: usize, j: usize) -> Option<Point> {
+        (i < self.gridh && j < self.gridw).then_some(Point {i, j})
     }
 }
 
@@ -203,6 +209,8 @@ fn main() {
     execute!(stdout(), EnterAlternateScreen).expect("failed to enter alt screen");
     enable_raw_mode().unwrap();
     game.game_loop();
+    print!("Press any key to exit ...");
+    stdout().flush().unwrap();
     game.ui.wait_for_action_block().ok();
     disable_raw_mode().unwrap();
     execute!(stdout(), LeaveAlternateScreen).expect("failed to exit alt screen");
