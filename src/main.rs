@@ -148,7 +148,6 @@ impl fmt::Display for MineSweeper {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         const ROW_SPACER: &str = "\r\n\r\n";
         const COL_SPACER: &str = " ";
-        let ax_labeller = |i: usize| if i.rem_euclid(3)==0 {i.to_string()} else {"".to_string()};
 
         // reset terminal cursor
         execute!(stdout(), MoveTo(0,0), Clear(ClearType::All)).unwrap();
@@ -179,9 +178,7 @@ impl fmt::Display for MineSweeper {
 
             // start new row
             if sqj == 0 {
-                let v_ax_lbl = ax_labeller(sqi);
                 write!(f, "{ROW_SPACER}")?;
-                write!(f, "{v_ax_lbl:2}")?;
             }
 
             // draw square
@@ -189,11 +186,6 @@ impl fmt::Display for MineSweeper {
         }
 
         // draw horizontal axis at the bottom
-        write!(f, "{ROW_SPACER}")?;
-        write!(f, "{:2}", "")?;
-        for h_ax_lbl in (0..self.gridw).map(ax_labeller) {
-            write!(f, "{h_ax_lbl:2}")?;
-        }
         write!(f, "{ROW_SPACER}")?;
 
         // print message
