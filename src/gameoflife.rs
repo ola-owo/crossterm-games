@@ -1,7 +1,10 @@
-use std::fmt;
+use std::{fmt, io};
 
 use ndarray::{s,azip,Array,Array2};
 use rand::distributions::{Distribution,Bernoulli};
+use crossterm::terminal::{Clear,ClearType};
+use crossterm::cursor::MoveTo;
+use crossterm::queue;
 
 pub struct GameOfLife {
     grid: Array2<bool>,
@@ -129,15 +132,16 @@ impl GameOfLife {
 // Pretty-print
 impl fmt::Display for GameOfLife {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // print grid lines
+        // clear screen
+        queue!(io::stdout(),
+            Clear(ClearType::All),
+            MoveTo(0, 0)
+        ).expect("display e");
+
+        // make grid lines
         let print_lines: Vec<Vec<&str>> = self.grid.outer_iter()
             .map(|row| 
-                row.iter().map(|&x|
-                    match x {
-                        false => "⬛️",
-                        true => "⬜️"
-                    }
-                ).collect()
+                row.iter().map(|&x| if x {"⬛️"} else {"⬜️"}).collect()
             )
             .collect();
 
@@ -147,7 +151,13 @@ impl fmt::Display for GameOfLife {
             .collect::<Vec<String>>()
             .join("\n")
             + "\n";
-        write!(f, "=== STEP {} ===\n", self.nstep).unwrap();
-        write!(f, "{}", print_lines_joined)
+        writeln!(f, "{}", print_lines_joined)?;
+
+        // status bar
+        writeln!(f)?;
+        writeln!(f, "=== STEP {} ===\n", self.nstep)?;
+
+        Ok(())
     }
 }
+

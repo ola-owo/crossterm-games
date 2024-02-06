@@ -1,41 +1,25 @@
 use std::io;
+use std::thread::sleep;
+use std::time::Duration;
+use crossterm::execute;
+use crossterm::terminal::{EnterAlternateScreen,LeaveAlternateScreen};
+use crossterm::cursor;
 
 mod gameoflife;
+use gameoflife::GameOfLife;
 
-use crate::gameoflife::GameOfLife;
 
 fn main() {
-    // println!("Hello, world!");
-    let mut game = GameOfLife::random(40, 30, 0.3);
-    for _ in 0..8 {
-        print!("{}", game);
+    // go to alt screen and hide cursor
+    execute!(io::stdout(), EnterAlternateScreen, cursor::Hide).unwrap();
 
-        // Get input "x y"
-        // parse input
-        // print value and NN of cell (x,y)
-        println!("> ");
-        let mut input_str = String::new();
-        loop {
-            input_str.clear();
-            io::stdin()
-            .read_line(&mut input_str)
-            .expect("failed to read line");
-        if input_str == "\n" {
-            break
-        }
-        let input_vec: Vec<usize> = input_str.trim()
-        .split(' ')
-                .map(|x| x.parse::<usize>().expect("input format must be 'x y'") )
-                .collect();
-            let &input_x = input_vec.get(0).expect("input format must be 'x y'");
-            let &input_y = input_vec.get(1).expect("input format must be 'x y'");
-            let cell = match game.get_cell(input_x, input_y) {
-                Some(false) => "⬛️",
-                Some(true) => "⬜️",
-                None => ""
-            };
-            println!("cell ({},{}): {}", input_x, input_y, cell);
-        }
+    let mut game = GameOfLife::random(40, 30, 0.3);
+    for _ in 0..200 {
+        print!("{}", game);
         game.tick();
+        sleep(Duration::from_secs_f32(0.1));
     }
+
+    // go back to normal screen/cursor
+    execute!(io::stdout(), LeaveAlternateScreen, cursor::Show).unwrap();
 }
