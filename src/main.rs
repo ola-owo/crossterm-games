@@ -1,54 +1,27 @@
 mod mines;
 mod mineui;
+mod point;
 
-use std::io::{stdout, Write};
+use std::io::{self, stdout, Write};
 use std::fmt;
 
-use crossterm::style::{ContentStyle, StyledContent, Stylize};
-use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
-use crossterm::terminal::{enable_raw_mode, disable_raw_mode};
-use crossterm::terminal::{Clear,ClearType};
-use crossterm::cursor::MoveTo;
-use crossterm::execute;
+use crossterm::style::{ContentStyle, StyledContent, Stylize, Print};
+use crossterm::terminal;
+use crossterm::{queue, execute, cursor};
 
 use mines::{MineField,MoveResult};
 use mineui::{MineUI, MineUIAction, UIMode};
 
 use crate::mines::SquareView;
+use crate::point::Point;
 
 const DIGIT_STRS: [&str; 9] = ["_", "1", "2", "3", "4", "5", "6", "7", "8"];
 const HIDDEN_STR: &str = "#";
 const MINE_STR: &str = "X";
 const FLAG_STR: &str = "@";
 
-#[derive(Clone, Copy)]
-pub struct Point {
-    i: usize,
-    j: usize
-}
-
-impl Point {
-    pub fn origin() -> Self {
-        Self {i:0, j:0}
-    }
-
-    pub fn tuple(&self) -> (usize, usize) {
-        (self.i, self.j)
-    }
-
-    #[allow(dead_code)]
-    pub fn arr(&self) -> [usize; 2] {
-        [self.i, self.j]
-    }
-}
-
-impl fmt::Display for Point {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "({}, {})", self.i, self.j)
-    }
-}
-
 pub struct MineSweeper {
+    #[allow(dead_code)]
     gridh: usize,
     gridw: usize,
     field: MineField,
@@ -93,14 +66,16 @@ impl MineSweeper {
     pub fn game_loop(&mut self) {
         let mut user_action: MineUIAction;
         loop {
-            println!("{}", self);
+            print!("{}", self);
             
             // wait for input
             user_action = self.ui.wait_for_action_block().expect("failed to read input");
-            dbg!(&user_action);
             
             match user_action {
                 MineUIAction::Quit => break,
+                MineUIAction::Help => self.print_help(&mut stdout()).unwrap_or(
+                    self.message = self.fmt_err_msg("help-text failed".into())
+                ),
                 MineUIAction::Wait => {},
                 MineUIAction::Mode(newmode) => self.ui.mode = newmode,
                 MineUIAction::ToggleMode => self.ui.toggle_mode(),
@@ -149,10 +124,14 @@ impl MineSweeper {
         msg.red()
     }
 
-    // get a point (i,j)
-    // this fxn mainly exists to make sure (i,j) is in-bounds
-    fn get_pt(&self, i: usize, j: usize) -> Option<Point> {
-        (i < self.gridh && j < self.gridw).then_some(Point {i, j})
+    fn print_help<T: io::Write>(&self, f: &mut T) -> io::Result<()> {
+        queue!(f,
+            terminal::Clear(terminal::ClearType::All),
+            cursor::MoveTo(0, 0),
+            Print(mineui::HELP_TEXT)
+        )?;
+        self.ui.wait_for_action_block()?;
+        Ok(())
     }
 }
 
@@ -163,7 +142,7 @@ impl fmt::Display for MineSweeper {
         const COL_SPACER: &str = " ";
 
         // reset terminal cursor
-        execute!(stdout(), MoveTo(0,0), Clear(ClearType::All)).unwrap();
+        execute!(stdout(), cursor::MoveTo(0,0), terminal::Clear(terminal::ClearType::All)).unwrap();
 
         let (cursor_i, cursor_j) = self.ui.get_cursor().tuple();
         let board_iter = self.field.get_view_iter();
@@ -209,14 +188,17 @@ impl fmt::Display for MineSweeper {
 }
 
 fn main() {
-    // println!("Hello, world!");
     let mut game = MineSweeper::new_beginner();
-    execute!(stdout(), EnterAlternateScreen).expect("failed to enter alt screen");
-    enable_raw_mode().unwrap();
+    let mut stdout = stdout();
+    execute!(stdout, terminal::EnterAlternateScreen, cursor::Hide)
+        .expect("failed to enter alt screen");
+    terminal::enable_raw_mode().unwrap();
+    game.print_help(&mut stdout).expect("help-text failed");
     game.game_loop();
-    print!("Press any key to exit ...");
-    stdout().flush().unwrap();
+    execute!(stdout, Print("Press any key to exit ...")).unwrap();
+    stdout.flush().unwrap();
     game.ui.wait_for_action_block().ok();
-    disable_raw_mode().unwrap();
-    execute!(stdout(), LeaveAlternateScreen).expect("failed to exit alt screen");
+    terminal::disable_raw_mode().unwrap();
+    queue!(stdout, terminal::LeaveAlternateScreen, cursor::Show)
+        .expect("failed to exit alt screen");
 }

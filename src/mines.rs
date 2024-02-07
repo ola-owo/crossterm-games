@@ -169,8 +169,8 @@ impl MineField {
 
     fn neighbors_iter(&self, p: &Point) -> impl Iterator<Item=Point> {
         let (gridh, gridw) = self.dim;
-        let i0 = p.i;
-        let j0 = p.j;
+        //let (i0, j0) = p.tuple();
+        let [i0, j0] = p.arr();
         let imin = i0.max(1) - 1;
         let jmin = j0.max(1) - 1;
         let imax = (i0+1).min(gridh-1);
@@ -178,7 +178,7 @@ impl MineField {
 
         (imin..=imax).flat_map(move |i| {
             (jmin..=jmax).filter_map(move |j| {
-                if i0==i && j0==j {None} else {Some(Point {i,j})}
+                if i0==i && j0==j {None} else {Some(Point::new(i, j))}
             })
         })
     }

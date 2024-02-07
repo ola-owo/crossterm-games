@@ -4,6 +4,14 @@ use crossterm::event::{poll, read, Event::Key, KeyCode, KeyEvent};
 
 use crate::Point;
 
+pub const HELP_TEXT: &str = "
+Use the arrow keys to move.\r
+Press <space> to select the highlighted square.\r
+Press <tab> to switch between reveal and flag mode.\r
+Press <h> to show this help screen.\r
+Press <q> to quit.\r
+";
+
 #[derive(Debug)]
 pub enum MineUIAction {
     Wait,
@@ -11,6 +19,7 @@ pub enum MineUIAction {
     Mode(UIMode),
     ToggleMode,
     Select,
+    Help,
     Quit
 }
 
@@ -50,6 +59,7 @@ impl MineUI {
             KeyCode::Char('f') => MineUIAction::Mode(UIMode::Flag),
             KeyCode::Char('r') => MineUIAction::Mode(UIMode::Reveal),
             KeyCode::Tab => MineUIAction::ToggleMode,
+            KeyCode::Char('h') => MineUIAction::Help,
             KeyCode::Char('q') => MineUIAction::Quit,
             _ => MineUIAction::Wait
         }
@@ -100,7 +110,7 @@ impl MineUI {
         }
 
         // actually move
-        self.reset_cursor(Point {i: new_i, j: new_j})
+        self.reset_cursor(Point::new(new_i, new_j))
 
     }
 
@@ -141,6 +151,7 @@ impl MineUI {
     }
 
     // poll with a timeout
+    #[allow(dead_code)]
     pub fn wait_for_action_poll(&self, timeout: u64) -> io::Result<MineUIAction> {
         let action: MineUIAction;
         let read_res = read();
