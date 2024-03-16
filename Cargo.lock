@@ -78,7 +78,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "langton"
+name = "gridgames"
 version = "0.1.0"
 dependencies = [
  "crossterm",

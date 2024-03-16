@@ -7,7 +7,7 @@
         {
             "type": "lldb",
             "request": "launch",
-            "name": "Debug executable 'langton'",
+            "name": "Debug executable 'gridgames'",
             "cargo": {
                 "args": [
                     "build",
