@@ -1,0 +1,7 @@
+[package]
+name = "langton"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ndarray = { workspace = true }

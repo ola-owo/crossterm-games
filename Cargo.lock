@@ -78,6 +78,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "langton"
+version = "1.0.0"
+dependencies = [
+ "ndarray",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.169"
 source = "registry+https://github.com/rust-lang/crates.io-index"
