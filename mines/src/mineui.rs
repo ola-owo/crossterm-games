@@ -20,7 +20,7 @@ pub enum MineUIAction {
     ToggleMode,
     Select,
     Help,
-    Quit
+    Quit,
 }
 
 #[derive(Debug)]
@@ -28,13 +28,13 @@ pub enum MoveDirection {
     Up,
     Down,
     Left,
-    Right
+    Right,
 }
 
 #[derive(Debug)]
 pub enum UIMode {
     Flag,
-    Reveal
+    Reveal,
 }
 
 pub struct MineUI {
@@ -61,7 +61,7 @@ impl MineUI {
             KeyCode::Tab => MineUIAction::ToggleMode,
             KeyCode::Char('h') => MineUIAction::Help,
             KeyCode::Char('q') => MineUIAction::Quit,
-            _ => MineUIAction::Wait
+            _ => MineUIAction::Wait,
         }
     }
 
@@ -74,7 +74,7 @@ impl MineUI {
             gridh: height,
             gridw: width,
             cursor: Point::origin(),
-            mode: UIMode::Reveal
+            mode: UIMode::Reveal,
         }
     }
 
@@ -82,41 +82,38 @@ impl MineUI {
     // Publics //
     /////////////
 
-    pub fn move_cursor(&mut self, dir: MoveDirection) -> Result<(),String> {
-        let cur_i = self.cursor.tuple().0 as u32;
-        let cur_j = self.cursor.tuple().1 as u32;
+    pub fn move_cursor(&mut self, dir: MoveDirection) -> Result<(), String> {
+        let cur_i = self.cursor.0 as u32;
+        let cur_j = self.cursor.1 as u32;
 
-        
         let delta: (i32, i32) = match dir {
             MoveDirection::Up => (-1, 0),
             MoveDirection::Down => (1, 0),
             MoveDirection::Left => (0, -1),
-            MoveDirection::Right => (0, 1)
+            MoveDirection::Right => (0, 1),
         };
-        
+
         // check upper and left boundaries
-        let new_i = cur_i.checked_add_signed(delta.0)
-            .ok_or("already at upper boundary")?
-            as usize;
-        let new_j = cur_j.checked_add_signed(delta.1)
-            .ok_or("already at left boundary")?
-            as usize;
+        let new_i = cur_i
+            .checked_add_signed(delta.0)
+            .ok_or("already at upper boundary")? as usize;
+        let new_j = cur_j
+            .checked_add_signed(delta.1)
+            .ok_or("already at left boundary")? as usize;
         // check right and lower boundaries
         if new_i >= self.gridh {
-            return Err("already at lower boundary".into())
+            return Err("already at lower boundary".into());
         }
         if new_j >= self.gridw {
-            return Err("already at rightward boundary".into())
+            return Err("already at rightward boundary".into());
         }
 
         // actually move
         self.reset_cursor(Point::new(new_i, new_j))
-
     }
 
-    pub fn reset_cursor(&mut self, p: Point) -> Result<(),String> {
-        let (pi, pj) = p.tuple();
-        if pi >= self.gridh || pj >= self.gridw {
+    pub fn reset_cursor(&mut self, p: Point) -> Result<(), String> {
+        if p.0 >= self.gridh || p.1 >= self.gridw {
             return Err(format!("point {} is OOB", p));
         }
 
@@ -131,7 +128,7 @@ impl MineUI {
     pub fn toggle_mode(&mut self) {
         let newmode = match self.mode {
             UIMode::Reveal => UIMode::Flag,
-            UIMode::Flag => UIMode::Reveal
+            UIMode::Flag => UIMode::Reveal,
         };
         self.mode = newmode;
     }
@@ -143,7 +140,7 @@ impl MineUI {
             let read_res = read();
             if let Key(key_event) = read_res? {
                 action = Self::match_key_to_action(key_event);
-                break
+                break;
             }
         }
 

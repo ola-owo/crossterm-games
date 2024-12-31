@@ -1,8 +1,11 @@
 use std::fmt;
 
 use itertools::izip;
-use ndarray::{s,azip,Array,Array2,Zip};
-use rand::{distributions::{Distribution,Bernoulli}, seq::SliceRandom};
+use ndarray::{azip, s, Array, Array2, Zip};
+use rand::{
+    distributions::{Bernoulli, Distribution},
+    seq::SliceRandom,
+};
 
 use crate::Point;
 
@@ -17,7 +20,7 @@ pub enum SquareView {
     Hidden,
     Flag,
     Revealed(u32),
-    Mine
+    Mine,
 }
 
 #[derive(Debug, PartialEq)]
@@ -27,11 +30,11 @@ pub enum MoveResult {
     Lose,
     Win,
     Ok,
-    Err(String)
+    Err(String),
 }
 
 pub struct MineField {
-    mines: Array2<bool>, // mines[i,j] == true if mine is at (i,j)
+    mines: Array2<bool>,    // mines[i,j] == true if mine is at (i,j)
     neighbors: Array2<u32>, // neighbors[i,j] == # of neighboring mines
     revealed: Array2<bool>, // revealed[i,j] == true if (i,j) has been revealed
     flagged: Array2<bool>,  // flagged[i,j] == true if flag has been placed at (i,j)
@@ -50,8 +53,9 @@ impl MineField {
         // mines has size (M,N)
         // create copy of mines (as u32) with 1 layer of zero-padding
         let (gridh, gridw) = mines.dim(); // (M, N)
-        let mut mines_pad: Array2<u32> = Array2::zeros((gridh+2, gridw+2)); // size (M+2, N+2)
-        mines.mapv(|x| x as u32)
+        let mut mines_pad: Array2<u32> = Array2::zeros((gridh + 2, gridw + 2)); // size (M+2, N+2)
+        mines
+            .mapv(|x| x as u32)
             .assign_to(mines_pad.slice_mut(s![1..-1, 1..-1]));
 
         // final array
@@ -78,7 +82,6 @@ impl MineField {
         nn
     }
 
-
     ///////////////
     // Constructors
     ///////////////
@@ -88,7 +91,13 @@ impl MineField {
         // check inputs
         let n_cells = height * width;
         assert!(height > 0 && width > 0, "grid size must be non-zero!");
-        assert!(n_mines < n_cells, "{}x{} grid can have up to {} mines!", height, width, n_cells);
+        assert!(
+            n_mines < n_cells,
+            "{}x{} grid can have up to {} mines!",
+            height,
+            width,
+            n_cells
+        );
 
         // build mine field
         // let mut rng = rand::thread_rng();
@@ -112,7 +121,7 @@ impl MineField {
             revealed: revealed,
             flagged: flagged,
             n_revealed: 0,
-            dim: dim
+            dim: dim,
         }
     }
 
@@ -130,7 +139,8 @@ impl MineField {
             .sample_iter(rng)
             .take(n_cells);
         let mines = Array::from_iter(bernoulli)
-            .into_shape([height, width]).unwrap();
+            .into_shape([height, width])
+            .unwrap();
 
         // build other struct fields
         let revealed = Array2::default(mines.raw_dim());
@@ -144,10 +154,9 @@ impl MineField {
             revealed: revealed,
             flagged: flagged,
             n_revealed: 0,
-            dim: dim
+            dim: dim,
         }
     }
-
 
     ///////////
     // Privates
@@ -163,22 +172,25 @@ impl MineField {
     fn is_revealed(&self, p: &Point) -> Option<bool> {
         match self.revealed.get(p.tuple()) {
             Some(x) => Some(x).copied(),
-            None => None
+            None => None,
         }
     }
 
-    fn neighbors_iter(&self, p: &Point) -> impl Iterator<Item=Point> {
+    fn neighbors_iter(&self, p: &Point) -> impl Iterator<Item = Point> {
         let (gridh, gridw) = self.dim;
-        //let (i0, j0) = p.tuple();
-        let [i0, j0] = p.arr();
+        let &Point(i0, j0) = p;
         let imin = i0.max(1) - 1;
         let jmin = j0.max(1) - 1;
-        let imax = (i0+1).min(gridh-1);
-        let jmax = (j0+1).min(gridw-1);
+        let imax = (i0 + 1).min(gridh - 1);
+        let jmax = (j0 + 1).min(gridw - 1);
 
         (imin..=imax).flat_map(move |i| {
             (jmin..=jmax).filter_map(move |j| {
-                if i0==i && j0==j {None} else {Some(Point::new(i, j))}
+                if i0 == i && j0 == j {
+                    None
+                } else {
+                    Some(Point::new(i, j))
+                }
             })
         })
     }
@@ -189,7 +201,7 @@ impl MineField {
         //     .all(|(&revealed, &mine)| {revealed || mine})
         let n_mines: u32 = self.mines.iter().map(|&x| x as u32).sum();
         let n_squares = self.mines.len() as u32;
-        
+
         self.n_revealed == n_squares - n_mines
 
         // let all_mines_flagged = Zip::from(&self.mines).and(&self.flagged)
@@ -200,20 +212,22 @@ impl MineField {
         // get reference to mine, throw error if not actually a mine
         let old_mine_ref = self.mines.get_mut(mine.tuple()).unwrap();
         if !*old_mine_ref {
-            return Err(format!("{} is not a mine", &mine))
+            return Err(format!("{} is not a mine", &mine));
         }
 
         // pick a random non-mine square
         let mut rng = rand::thread_rng();
         loop {
-            let square_ptr = self.mines.as_slice_mut()
+            let square_ptr = self
+                .mines
+                .as_slice_mut()
                 .expect("'mines' array is non-contiguous??")
                 .choose_mut(&mut rng)
                 .expect("'mines' is empty??");
             if !*square_ptr {
                 // set random square as mine
                 *square_ptr = true;
-                break
+                break;
             }
         }
 
@@ -233,7 +247,7 @@ impl MineField {
             if !self.is_revealed(&neighbor_pt).unwrap() {
                 res = self.reveal(&neighbor_pt);
                 if res != MoveResult::Ok {
-                    break
+                    break;
                 }
             }
         }
@@ -242,7 +256,8 @@ impl MineField {
 
     fn chord(&mut self, p: &Point) -> MoveResult {
         let nn_mines: u32 = *self.neighbors.get(p.tuple()).unwrap();
-        let nn_flags = self.neighbors_iter(p)
+        let nn_flags = self
+            .neighbors_iter(p)
             .map(|p| self.is_flag(&p).unwrap() as u32)
             .sum();
 
@@ -261,7 +276,6 @@ impl MineField {
         );
     }
 
-
     //////////
     // Publics
     //////////
@@ -269,12 +283,12 @@ impl MineField {
     pub fn toggle_flag(&mut self, p: &Point) -> MoveResult {
         // if already revealed, do nothing
         if let Some(true) = self.is_revealed(p) {
-            return MoveResult::Ok
+            return MoveResult::Ok;
         }
 
         // flip flagged state
         if let Some(flagged) = self.flagged.get_mut(p.tuple()) {
-            *flagged = ! *flagged;
+            *flagged = !*flagged;
             MoveResult::Ok
         } else {
             MoveResult::Err(String::from("index OOB"))
@@ -292,15 +306,15 @@ impl MineField {
 
         Some(match (revealed, ismine, isflag) {
             (false, _, false) => SquareView::Hidden,
-            (false, _, true)  => SquareView::Flag,
-            (true, false, _)  => SquareView::Revealed(*self.neighbors.get(p.tuple()).unwrap()),
-            (true, true, _)   => SquareView::Mine
+            (false, _, true) => SquareView::Flag,
+            (true, false, _) => SquareView::Revealed(*self.neighbors.get(p.tuple()).unwrap()),
+            (true, true, _) => SquareView::Mine,
         })
     }
 
     // '_ is the anonymous lifetime of the ndarray iterators
     // + '_ indicates that iterator lifetime is bound by underlying ndarrays (I think)
-    pub fn get_view_iter(&self) -> impl Iterator<Item=SquareView> + '_ {
+    pub fn get_view_iter(&self) -> impl Iterator<Item = SquareView> + '_ {
         let sqdata_zip = izip!(
             self.revealed.iter(),
             self.mines.iter(),
@@ -308,13 +322,11 @@ impl MineField {
             self.neighbors.iter()
         );
 
-        sqdata_zip.map(|(&rev, &mine, &flag, &nn)| {
-            match (rev, mine, flag, nn) {
-                (false, _, false, _) => SquareView::Hidden,
-                (false, _, true, _)  => SquareView::Flag,
-                (true, false, _, nn) => SquareView::Revealed(nn),
-                (true, true, _, _)   => SquareView::Mine
-            }
+        sqdata_zip.map(|(&rev, &mine, &flag, &nn)| match (rev, mine, flag, nn) {
+            (false, _, false, _) => SquareView::Hidden,
+            (false, _, true, _) => SquareView::Flag,
+            (true, false, _, nn) => SquareView::Revealed(nn),
+            (true, true, _, _) => SquareView::Mine,
         })
     }
 
@@ -340,12 +352,13 @@ impl MineField {
             None => return MoveResult::Err(String::from("index OOB")),
             Some(SquareView::Flag) => return MoveResult::Ok, // do nothing if flag
             Some(SquareView::Revealed(_)) => return self.chord(p),
-            Some(SquareView::Hidden) => { // if hidden, mark square as revealed
+            Some(SquareView::Hidden) => {
+                // if hidden, mark square as revealed
                 let rev = self.revealed.get_mut(p.tuple()).unwrap();
                 *rev = true;
                 self.n_revealed += 1;
-            },
-            _ => ()
+            }
+            _ => (),
         }
 
         // if a mine is hit, end game
@@ -356,7 +369,7 @@ impl MineField {
                 self.move_mine(p).unwrap();
             } else {
                 self.reveal_all_mines();
-                return MoveResult::Lose
+                return MoveResult::Lose;
             }
         }
 
@@ -374,7 +387,6 @@ impl MineField {
             MoveResult::Ok
         }
     }
-    
 }
 
 // Pretty-print
@@ -388,16 +400,22 @@ impl fmt::Display for MineField {
         // print grid lines
         let print_lines = sqdata_zip.map_collect(|&mine, &rev, &nn, &flag| {
             match (mine, rev, nn, flag) {
-                (_, false, _, false) => HIDDEN_STR,                // hidden square (⬛️)
-                (_, false, _, true) => FLAG_STR, // space w/ nearby mines
-                (true, true, _, _) => MINE_STR,                 // revealed mine
-                (false, true, 0, _) => DIGIT_STRS[0],     // empty space
+                (_, false, _, false) => HIDDEN_STR,   // hidden square (⬛️)
+                (_, false, _, true) => FLAG_STR,      // space w/ nearby mines
+                (true, true, _, _) => MINE_STR,       // revealed mine
+                (false, true, 0, _) => DIGIT_STRS[0], // empty space
                 (false, true, n, _) => DIGIT_STRS[n as usize], // space w/ nearby mines
             }
         });
 
         // write each (styled) character separately
-        let ax_labeller = |i: usize| if i.rem_euclid(3)==0 {i.to_string()} else {"".to_string()};
+        let ax_labeller = |i: usize| {
+            if i.rem_euclid(3) == 0 {
+                i.to_string()
+            } else {
+                "".to_string()
+            }
+        };
         let mut write_res: fmt::Result = Ok(());
         for (i, row) in print_lines.outer_iter().enumerate() {
             // print vertical axis labels

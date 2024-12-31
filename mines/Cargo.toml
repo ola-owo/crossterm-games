@@ -1,0 +1,10 @@
+[package]
+name = "mines"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ndarray = { workspace = true }
+crossterm = { workspace = true }
+rand = { workspace = true }
+itertools = "0.12.1"

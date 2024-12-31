@@ -2,14 +2,14 @@ mod mines;
 mod mineui;
 mod point;
 
-use std::io::{self, stdout, Write};
 use std::fmt;
+use std::io::{self, stdout, Write};
 
-use crossterm::style::{ContentStyle, StyledContent, Stylize, Print};
+use crossterm::style::{ContentStyle, Print, StyledContent, Stylize};
 use crossterm::terminal;
-use crossterm::{queue, execute, cursor};
+use crossterm::{cursor, execute, queue};
 
-use mines::{MineField,MoveResult};
+use mines::{MineField, MoveResult};
 use mineui::{MineUI, MineUIAction, UIMode};
 
 use crate::mines::SquareView;
@@ -26,7 +26,7 @@ pub struct MineSweeper {
     gridw: usize,
     field: MineField,
     ui: MineUI,
-    message: StyledContent<String>
+    message: StyledContent<String>,
 }
 
 impl MineSweeper {
@@ -36,7 +36,7 @@ impl MineSweeper {
             gridw: width,
             field: MineField::with_n_mines(height, width, n_mines),
             ui: MineUI::new(height, width),
-            message: StyledContent::new(ContentStyle::default(), "".into())
+            message: StyledContent::new(ContentStyle::default(), "".into()),
         }
     }
 
@@ -46,7 +46,7 @@ impl MineSweeper {
             gridw: width,
             field: MineField::with_mine_ratio(height, width, fill_ratio),
             ui: MineUI::new(height, width),
-            message: StyledContent::new(ContentStyle::default(), "".into())
+            message: StyledContent::new(ContentStyle::default(), "".into()),
         }
     }
 
@@ -67,48 +67,51 @@ impl MineSweeper {
         let mut user_action: MineUIAction;
         loop {
             print!("{}", self);
-            
+
             // wait for input
-            user_action = self.ui.wait_for_action_block().expect("failed to read input");
-            
+            user_action = self
+                .ui
+                .wait_for_action_block()
+                .expect("failed to read input");
+
             match user_action {
                 MineUIAction::Quit => break,
-                MineUIAction::Help => self.print_help(&mut stdout()).unwrap_or(
-                    self.message = self.fmt_err_msg("help-text failed".into())
-                ),
-                MineUIAction::Wait => {},
+                MineUIAction::Help => self
+                    .print_help(&mut stdout())
+                    .unwrap_or(self.message = self.fmt_err_msg("help-text failed".into())),
+                MineUIAction::Wait => {}
                 MineUIAction::Mode(newmode) => self.ui.mode = newmode,
                 MineUIAction::ToggleMode => self.ui.toggle_mode(),
                 MineUIAction::Move(movedir) => {
                     self.message = "".to_string().reset();
                     self.ui.move_cursor(movedir).ok();
-                },
+                }
                 MineUIAction::Select => {
                     let p = self.ui.get_cursor();
                     let move_res = match self.ui.mode {
                         UIMode::Reveal => self.field.reveal(&p),
-                        UIMode::Flag => self.field.toggle_flag(&p)
+                        UIMode::Flag => self.field.toggle_flag(&p),
                     };
                     if !self.handle_res(&move_res) {
                         println!("{}", self);
-                        break
+                        break;
                     }
-                },
+                }
             }
         }
     }
-    
+
     // output indicates whether to keep looping
     fn handle_res(&mut self, res: &MoveResult) -> bool {
         match res {
             MoveResult::Lose => {
                 self.message = "You lose!".to_string().bold().white().on_dark_red();
                 false
-            },
+            }
             MoveResult::Win => {
                 self.message = "You win!".to_string().bold().white().on_magenta();
                 false
-            },
+            }
             MoveResult::Err(ref msg) => {
                 self.message = self.fmt_err_msg(msg.to_string());
                 true
@@ -120,12 +123,16 @@ impl MineSweeper {
         }
     }
 
-    fn fmt_err_msg<D: fmt::Display + Stylize<Styled = StyledContent<D>>>(&mut self, msg: D) -> StyledContent<D> {
+    fn fmt_err_msg<D: fmt::Display + Stylize<Styled = StyledContent<D>>>(
+        &mut self,
+        msg: D,
+    ) -> StyledContent<D> {
         msg.red()
     }
 
     fn print_help<T: io::Write>(&self, f: &mut T) -> io::Result<()> {
-        queue!(f,
+        queue!(
+            f,
             terminal::Clear(terminal::ClearType::All),
             cursor::MoveTo(0, 0),
             Print(mineui::HELP_TEXT)
@@ -142,9 +149,14 @@ impl fmt::Display for MineSweeper {
         const COL_SPACER: &str = " ";
 
         // reset terminal cursor
-        execute!(stdout(), cursor::MoveTo(0,0), terminal::Clear(terminal::ClearType::All)).unwrap();
+        execute!(
+            stdout(),
+            cursor::MoveTo(0, 0),
+            terminal::Clear(terminal::ClearType::All)
+        )
+        .unwrap();
 
-        let (cursor_i, cursor_j) = self.ui.get_cursor().tuple();
+        let cursor = self.ui.get_cursor();
         let board_iter = self.field.get_view_iter();
         for (sq_ix, sq) in board_iter.enumerate() {
             // assign (styled) string for this square
@@ -153,7 +165,7 @@ impl fmt::Display for MineSweeper {
                 SquareView::Flag => FLAG_STR.dark_yellow(),
                 SquareView::Mine => MINE_STR.red(),
                 SquareView::Revealed(0) => DIGIT_STRS[0].dark_grey(),
-                SquareView::Revealed(nn) => DIGIT_STRS[nn as usize].white()
+                SquareView::Revealed(nn) => DIGIT_STRS[nn as usize].white(),
             };
 
             // get coordinates of this square
@@ -161,10 +173,10 @@ impl fmt::Display for MineSweeper {
             let sqj = sq_ix.rem_euclid(self.gridw);
 
             // replace sq_str with cursor
-            if sqi == cursor_i && sqj == cursor_j {
+            if sqi == cursor.0 && sqj == cursor.1 {
                 sq_str = match self.ui.mode {
                     mineui::UIMode::Reveal => sq_str.bold().cyan(),
-                    mineui::UIMode::Flag => sq_str.bold().yellow()
+                    mineui::UIMode::Flag => sq_str.bold().yellow(),
                 }
             }
 
